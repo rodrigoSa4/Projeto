@@ -121,8 +121,8 @@ def create_inception_model():
         weights='imagenet'
     )
 
-    # Descongelar as últimas camadas
-    for layer in base_model.layers[-50:]:
+    # Descongelar as últimas 30 camadas
+    for layer in base_model.layers[-10:]:
         if not isinstance(layer, layers.BatchNormalization):
             layer.trainable = True
 
@@ -176,67 +176,73 @@ for train_index, val_index in skf.split(X_train_images_balanced, y_train_balance
         validation_data=(X_val_fold, y_val_fold),
         callbacks=[
             tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-            tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=0.00001)
+            tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6)
         ]
     )
     
     scores = model.evaluate(X_val_fold, y_val_fold, verbose=0)
+    print(f'Score for fold {fold_no}: {model.metrics_names[1]} of {scores[1]*100:.2f}%')
     accuracy_per_fold.append(scores[1] * 100)
-    print(f'Precisão para o fold {fold_no}: {scores[1] * 100}%')
-    
     fold_no += 1
 
+print('Scores de cada dobra:', accuracy_per_fold)
+print('Acurácia média:', np.mean(accuracy_per_fold))
+print('Desvio padrão da acurácia:', np.std(accuracy_per_fold))
+
 # Avaliar o modelo no conjunto de teste
-final_model = create_inception_model()
-final_model.fit(
-    train_generator,
-    steps_per_epoch=len(X_train_images_balanced) // 32,
-    epochs=30,
-    callbacks=[
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-        tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=0.00001)
-    ]
-)
+model = create_inception_model()
+model.fit(train_generator, epochs=30, validation_data=(X_test_images, y_test))
+test_loss, test_accuracy = model.evaluate(X_test_images, y_test)
+print(f'Acurácia no conjunto de teste: {test_accuracy * 100:.2f}%')
 
-# Avaliar o modelo final
-test_loss, test_accuracy = final_model.evaluate(X_test_images, y_test, verbose=0)
-print(f'Acurácia no conjunto de teste: {test_accuracy * 100}%')
-
-# Prever as probabilidades para o conjunto de teste
-y_pred_proba = final_model.predict(X_test_images)
-y_pred = np.argmax(y_pred_proba, axis=1)
-
-# Calcular a matriz de confusão
+# matriz de confusao
+y_pred = np.argmax(model.predict(X_test_images), axis=-1)
 cm = confusion_matrix(y_test, y_pred)
-
-# Plotar a matriz de confusão
-plt.figure(figsize=(10, 8))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=[f'Class {i}' for i in range(num_classes)], yticklabels=[f'Class {i}' for i in range(num_classes)])
+plt.figure(figsize=(10, 7))
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 plt.xlabel('Predicted Label')
 plt.ylabel('True Label')
 plt.title('Confusion Matrix')
 plt.show()
 
-# Calcular as curvas ROC e AUC para cada classe
-y_test_binarized = label_binarize(y_test, classes=[0, 1, 2, 3])
+# Plotar 8 imagens aleatórias do conjunto de teste com as classes reais e previstas
+num_images = 8
+random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
+sample_images = X_test_images[random_indices]
+sample_labels = y_test[random_indices]
+predictions = model.predict(sample_images)
+predicted_labels = np.argmax(predictions, axis=1)
+
+plt.figure(figsize=(15, 15))
+for i in range(num_images):
+    plt.subplot(5, 2, i + 1)
+    plt.imshow(sample_images[i])
+    plt.title(f"True: {sample_labels[i]}, Predicted: {predicted_labels[i]}")
+    plt.axis('off')
+plt.tight_layout()
+plt.show()
+
+# Plotar a curva ROC para cada classe
+y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
+y_pred_prob = model.predict(X_test_images)
+
 fpr = dict()
 tpr = dict()
 roc_auc = dict()
-
 for i in range(num_classes):
-    fpr[i], tpr[i], _ = roc_curve(y_test_binarized[:, i], y_pred_proba[:, i])
+    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_pred_prob[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
 
-# Plotar as curvas ROC
+# Plotar todas as curvas ROC
 plt.figure()
-colors = ['blue', 'green', 'red', 'orange']
-for i, color in enumerate(colors):
-    plt.plot(fpr[i], tpr[i], color=color, lw=2, label=f'Class {i} (AUC = {roc_auc[i]:.2f})')
-plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+colors = ['blue', 'red', 'green', 'orange']
+for i, color in zip(range(num_classes), colors):
+    plt.plot(fpr[i], tpr[i], color=color, lw=2, label=f'Curva ROC da classe {i} (área = {roc_auc[i]:.2f})')
+plt.plot([0, 1], [0, 1], 'k--', lw=2)
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
-plt.xlabel('False Positive Rate')
-plt.ylabel('True Positive Rate')
-plt.title('Receiver Operating Characteristic (ROC) Curve')
-plt.legend(loc='lower right')
+plt.xlabel('Taxa de Falsos Positivos')
+plt.ylabel('Taxa de Verdadeiros Positivos')
+plt.title('Curvas ROC para cada classe')
+plt.legend(loc="lower right")
 plt.show()
