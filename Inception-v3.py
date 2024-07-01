@@ -13,18 +13,18 @@ import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import label_binarize
 
-# Função para carregar imagens de diretórios correspondentes a diferentes intervalos de tempo
+# Função para carregar imagens de pastas correspondentes a diferentes intervalos de tempo
 def load_images_from_directories(directories, image_size):
     images = []
     labels = []
     for label, directory in enumerate(directories):
         for root, _, files in os.walk(directory):
             for filename in files:
-                if filename.endswith(".png") or filename.endswith(".jpg"):  # Ajuste conforme necessário
+                if filename.endswith(".png") or filename.endswith(".jpg"):  
                     img_path = os.path.join(root, filename)
                     img = Image.open(img_path).resize(image_size)
-                    img = np.array(img) / 255.0  # Normalizar a imagem para [0, 1]
-                    if img.shape == (image_height, image_width, image_channels):  # Certifique-se de que a imagem tem o formato correto
+                    img = np.array(img) / 255.0  
+                    if img.shape == (image_height, image_width, image_channels):  
                         images.append(img)
                         labels.append(label)
     return np.array(images), np.array(labels)
@@ -60,22 +60,22 @@ print(f"Número de amostras de teste: {len(X_test_images)}")
 print(f"Formas das imagens de teste: {X_test_images.shape}")
 print(f"Etiquetas de teste: {y_test}")
 
-# Contar o número de exemplos em cada classe antes do balanceamento
+# Contar o número de exemplos em cada classe antes do equilibrio
 counter_before = Counter(y_train)
 print("Distribuição das classes antes do balanceamento:", counter_before)
 
-# Plotar gráfico de barras com a distribuição de classes antes do balanceamento
+# Plotar gráfico de barras com a distribuição de classes antes do equilibrio
 plt.figure(figsize=(10, 5))
 plt.bar(counter_before.keys(), counter_before.values(), color='blue')
 plt.xlabel('Classes')
 plt.ylabel('Número de Amostras')
-plt.title('Distribuição de Classes Antes do Balanceamento')
+plt.title('Distribuição de Classes Antes do equilibrio')
 plt.show()
 
 # Definir max_count como o número máximo de amostras em qualquer classe
 max_count = max(counter_before.values())
 
-# Função para balancear as classes
+# Função para equilibrar as classes
 def balance_classes(X_images, y):
     unique_classes = np.unique(y)
     X_images_balanced = []
@@ -98,14 +98,14 @@ def balance_classes(X_images, y):
 
     return np.vstack(X_images_balanced), np.hstack(y_balanced)
 
-# Aplicar o balanceamento
+# Aplicar 
 X_train_images_balanced, y_train_balanced = balance_classes(X_train_images, y_train)
 
-# Contar o número de exemplos em cada classe depois do balanceamento
+# Contar o número de exemplos em cada classe depois do equilibrio
 counter_after = Counter(y_train_balanced)
 print("Distribuição das classes depois do balanceamento:", counter_after)
 
-# Plotar gráfico de barras com a distribuição de classes depois do balanceamento
+# Plotar gráfico de barras com a distribuição de classes depois do equilibrio
 plt.figure(figsize=(10, 5))
 plt.bar(counter_after.keys(), counter_after.values(), color='green')
 plt.xlabel('Classes')
@@ -141,7 +141,7 @@ def create_inception_model():
                   metrics=['accuracy'])
     return model
 
-# Definir gerador de dados de treinamento com aumento de dados
+# Definir gerador de dados de treino com aumento de dados
 train_datagen = ImageDataGenerator(
     rotation_range=20,
     width_shift_range=0.2,
@@ -154,7 +154,7 @@ train_datagen = ImageDataGenerator(
 # Aplicar aumento de dados
 train_generator = train_datagen.flow(X_train_images_balanced, y_train_balanced, batch_size=32)
 
-# Treinar o modelo usando Cross-Validation
+# Cross-Validation
 num_folds = 5
 skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
 
@@ -162,7 +162,7 @@ accuracy_per_fold = []
 fold_no = 1
 
 for train_index, val_index in skf.split(X_train_images_balanced, y_train_balanced):
-    print(f'Treino para a dobra {fold_no}:')
+    print(f'Treino para fold {fold_no}:')
     
     X_train_fold, X_val_fold = X_train_images_balanced[train_index], X_train_images_balanced[val_index]
     y_train_fold, y_val_fold = y_train_balanced[train_index], y_train_balanced[val_index]
@@ -186,14 +186,14 @@ for train_index, val_index in skf.split(X_train_images_balanced, y_train_balance
     fold_no += 1
 
 print('Scores de cada dobra:', accuracy_per_fold)
-print('Acurácia média:', np.mean(accuracy_per_fold))
-print('Desvio padrão da acurácia:', np.std(accuracy_per_fold))
+print('Precisão média:', np.mean(accuracy_per_fold))
+print('Desvio padrão da precisão:', np.std(accuracy_per_fold))
 
 # Avaliar o modelo no conjunto de teste
 model = create_inception_model()
 model.fit(train_generator, epochs=30, validation_data=(X_test_images, y_test))
 test_loss, test_accuracy = model.evaluate(X_test_images, y_test)
-print(f'Acurácia no conjunto de teste: {test_accuracy * 100:.2f}%')
+print(f'Precisão no conjunto de teste: {test_accuracy * 100:.2f}%')
 
 # matriz de confusao
 y_pred = np.argmax(model.predict(X_test_images), axis=-1)
@@ -205,8 +205,9 @@ plt.ylabel('True Label')
 plt.title('Confusion Matrix')
 plt.show()
 
-# Plotar 8 imagens aleatórias do conjunto de teste com as classes reais e previstas
-num_images = 8
+
+# Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
+num_images = 5
 random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
 sample_images = X_test_images[random_indices]
 sample_labels = y_test[random_indices]
