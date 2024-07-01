@@ -92,11 +92,11 @@ def balance_classes(X_images, y):
 
     return np.vstack(X_images_balanced), np.hstack(y_balanced)
 
-# Aplicar o balanceamento
+# Aplicar o equilibrio
 X_train_images_balanced, y_train_balanced = balance_classes(X_train_images, y_train)
 
-print("Número de amostras de treino após balanceamento:", len(y_train_balanced))
-print("Distribuição das classes no conjunto de treino balanceado:", Counter(y_train_balanced))
+print("Número de amostras de treino após equilibrio:", len(y_train_balanced))
+print("Distribuição das classes no conjunto de treino equilibrado:", Counter(y_train_balanced))
 
 # Função para construir o modelo 
 def create_model():
