@@ -20,11 +20,11 @@ def load_images_from_directories(directories, image_size):
     for label, directory in enumerate(directories):
         for root, _, files in os.walk(directory):
             for filename in files:
-                if filename.endswith(".png") or filename.endswith(".jpg"):  # Ajuste conforme necessário
+                if filename.endswith(".png") or filename.endswith(".jpg"):  
                     img_path = os.path.join(root, filename)
                     img = Image.open(img_path).resize(image_size)
-                    img = np.array(img) / 255.0  # Normalizar a imagem para [0, 1]
-                    if img.shape == (image_height, image_width, image_channels):  # Certifique-se de que a imagem tem o formato correto
+                    img = np.array(img) / 255.0  
+                    if img.shape == (image_height, image_width, image_channels):  
                         images.append(img)
                         labels.append(label)
     return np.array(images), np.array(labels)
