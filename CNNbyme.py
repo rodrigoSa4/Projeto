@@ -13,7 +13,7 @@ import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import label_binarize
 
-# Função para carregar imagens de diretórios correspondentes a diferentes intervalos de tempo
+# Função para carregar imagens das pastas correspondentes a diferentes intervalos de tempo
 def load_images_from_directories(directories, image_size):
     images = []
     labels = []
@@ -33,7 +33,7 @@ def load_images_from_directories(directories, image_size):
 image_height, image_width, image_channels = 128, 128, 3
 num_classes = 4  # Número de intervalos de tempo pós impacto
 
-# Diretórios das pastas de imagens (treino e teste)
+#  pastas de imagens (treino e teste)
 train_directories = [
     "F:\\UA\\3 ano\\2 semestre\\Projeto de licenciatura\\Codigo\\TBI-AD Microscope Images\\TBI-AD Microscope Images\\training\\1 day",
     "F:\\UA\\3 ano\\2 semestre\\Projeto de licenciatura\\Codigo\\TBI-AD Microscope Images\\TBI-AD Microscope Images\\training\\1 week",
@@ -60,15 +60,15 @@ print(f"Número de amostras de teste: {len(X_test_images)}")
 print(f"Formas das imagens de teste: {X_test_images.shape}")
 print(f"Etiquetas de teste: {y_test}")
 
-# Contar o número de exemplos em cada classe
+# Contar o número de amostras em cada classe
 counter = Counter(y_train)
 print(counter)
 
-# Balanceamento de classes
+# Equilibrio de classes
 class_counts = Counter(y_train)
 max_count = max(class_counts.values())
 
-# Função para balancear as classes
+# Função para equilibrar as classes
 def balance_classes(X_images, y):
     unique_classes = np.unique(y)
     X_images_balanced = []
@@ -98,7 +98,7 @@ X_train_images_balanced, y_train_balanced = balance_classes(X_train_images, y_tr
 print("Número de amostras de treino após balanceamento:", len(y_train_balanced))
 print("Distribuição das classes no conjunto de treino balanceado:", Counter(y_train_balanced))
 
-# Função para construir o modelo simplificado
+# Função para construir o modelo 
 def create_model():
     image_input = tf.keras.Input(shape=(image_height, image_width, image_channels), name='image_input')
 
@@ -161,7 +161,7 @@ for train_index, val_index in kf.split(X_train_images_balanced, y_train_balanced
 print(f"Scores de Validação Cruzada: {validation_scores}")
 print(f"Score Médio de Validação Cruzada: {np.mean(validation_scores)}")
 
-# Treinamento final com todos os dados de treino
+# Treino final com todos os dados de treino
 model = create_model()
 history = model.fit(
     X_train_images_balanced, y_train_balanced,
@@ -194,8 +194,8 @@ plt.ylabel('True Label')
 plt.title('Confusion Matrix')
 plt.show()
 
-# Plotar 10 imagens aleatórias do conjunto de teste com as classes reais e previstas
-num_images = 8
+# Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
+num_images = 5
 random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
 sample_images = X_test_images[random_indices]
 sample_labels = y_test[random_indices]
@@ -236,4 +236,4 @@ plt.title('Receiver Operating Characteristic (ROC) Curve')
 plt.legend(loc="lower right")
 plt.show()
 
-#72,19% test accuracy - melhor resultado
+
