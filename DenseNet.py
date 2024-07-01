@@ -267,3 +267,19 @@ plt.title('Evolução das Precisões de Validação por Fold')
 plt.legend()
 plt.show()
 
+# Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
+num_images = 5
+random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
+sample_images = X_test_images[random_indices]
+sample_labels = y_test[random_indices]
+predictions = model.predict(sample_images)
+predicted_labels = np.argmax(predictions, axis=1)
+
+plt.figure(figsize=(15, 15))
+for i in range(num_images):
+    plt.subplot(5, 2, i + 1)
+    plt.imshow(sample_images[i])
+    plt.title(f"True: {sample_labels[i]}, Predicted: {predicted_labels[i]}")
+    plt.axis('off')
+plt.tight_layout()
+plt.show()
