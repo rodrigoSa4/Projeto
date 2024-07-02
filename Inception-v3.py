@@ -8,10 +8,11 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
 from collections import Counter
-from sklearn.metrics import confusion_matrix, roc_curve, auc
-import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import confusion_matrix, roc_curve, auc, classification_report
+import seaborn as sns
 from sklearn.preprocessing import label_binarize
+from sklearn.utils.class_weight import compute_class_weight
 
 # Função para carregar imagens de pastas correspondentes a diferentes intervalos de tempo
 def load_images_from_directories(directories, image_size):
@@ -98,12 +99,12 @@ def balance_classes(X_images, y):
 
     return np.vstack(X_images_balanced), np.hstack(y_balanced)
 
-# Aplicar 
+# Aplicar balanceamento
 X_train_images_balanced, y_train_balanced = balance_classes(X_train_images, y_train)
 
 # Contar o número de exemplos em cada classe depois do equilibrio
 counter_after = Counter(y_train_balanced)
-print("Distribuição das classes depois do balanceamento:", counter_after)
+print("Distribuição das classes depois do equilibrio:", counter_after)
 
 # Plotar gráfico de barras com a distribuição de classes depois do equilibrio
 plt.figure(figsize=(10, 5))
@@ -114,15 +115,15 @@ plt.title('Distribuição de Classes Depois do Balanceamento')
 plt.show()
 
 # Função para construir o modelo Inception-v3 pré-treinado com camadas adicionais e regularização
-def create_inception_model():
+def create_inception_model(unfreeze_layers=10, learning_rate=0.0001):
     base_model = tf.keras.applications.InceptionV3(
         input_shape=(image_height, image_width, image_channels),
         include_top=False,
         weights='imagenet'
     )
 
-    # Descongelar as últimas 30 camadas
-    for layer in base_model.layers[-10:]:
+    # Descongelar as últimas `unfreeze_layers` camadas
+    for layer in base_model.layers[-unfreeze_layers:]:
         if not isinstance(layer, layers.BatchNormalization):
             layer.trainable = True
 
@@ -136,10 +137,14 @@ def create_inception_model():
 
     model = tf.keras.Model(inputs=image_input, outputs=x)
 
-    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0001),
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=learning_rate),
                   loss='sparse_categorical_crossentropy',
                   metrics=['accuracy'])
     return model
+
+# Ajuste de parâmetros para o treinamento
+num_folds = 5
+skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
 
 # Definir gerador de dados de treino com aumento de dados
 train_datagen = ImageDataGenerator(
@@ -154,50 +159,62 @@ train_datagen = ImageDataGenerator(
 # Aplicar aumento de dados
 train_generator = train_datagen.flow(X_train_images_balanced, y_train_balanced, batch_size=32)
 
-# Cross-Validation
-num_folds = 5
-skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
-
 accuracy_per_fold = []
 fold_no = 1
 
+# Definir os pesos das classes (ajustar o peso da classe 0)
+class_weights = {0: 2.0, 1: 1.0, 2: 1.0, 3: 1.0}
+
 for train_index, val_index in skf.split(X_train_images_balanced, y_train_balanced):
-    print(f'Treino para fold {fold_no}:')
+    print(f'Treino para a fold {fold_no}:')
     
     X_train_fold, X_val_fold = X_train_images_balanced[train_index], X_train_images_balanced[val_index]
     y_train_fold, y_val_fold = y_train_balanced[train_index], y_train_balanced[val_index]
 
-    model = create_inception_model()
+    # Aqui você pode variar `unfreeze_layers` e `learning_rate`
+    model = create_inception_model(unfreeze_layers=20, learning_rate=0.00005)
     
     history = model.fit(
         train_generator,
         steps_per_epoch=len(X_train_fold) // 32,
         epochs=30,
         validation_data=(X_val_fold, y_val_fold),
+        class_weight=class_weights,  # Adicionar class weights
         callbacks=[
             tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-            tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=1e-6)
+            tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.5, patience=3)
         ]
     )
     
     scores = model.evaluate(X_val_fold, y_val_fold, verbose=0)
-    print(f'Score for fold {fold_no}: {model.metrics_names[1]} of {scores[1]*100:.2f}%')
+    print(f'Score da fold {fold_no}: {model.metrics_names[1]} de {scores[1]*100:.2f}%')
     accuracy_per_fold.append(scores[1] * 100)
     fold_no += 1
 
-print('Scores de cada dobra:', accuracy_per_fold)
-print('Precisão média:', np.mean(accuracy_per_fold))
-print('Desvio padrão da precisão:', np.std(accuracy_per_fold))
+# Avaliar o modelo no conjunto de teste balanceado
+X_test_images_balanced, y_test_balanced = balance_classes(X_test_images, y_test)
+
+test_datagen = ImageDataGenerator()
+
+# Aplicar aumento de dados ao conjunto de teste
+test_generator = test_datagen.flow(X_test_images_balanced, y_test_balanced, batch_size=32)
+
+test_scores = model.evaluate(test_generator, verbose=0)
+print(f'Precisão no conjunto de teste equilibrado: {test_scores[1]*100:.2f}%')
+
+print(f'Média de precisão nas {num_folds} folds: {np.mean(accuracy_per_fold):.2f}%')
+print(f'Desvio padrão da precisão nas {num_folds} folds: {np.std(accuracy_per_fold):.2f}%')
+
 
 # Avaliar o modelo no conjunto de teste
-model = create_inception_model()
-model.fit(train_generator, epochs=30, validation_data=(X_test_images, y_test))
-test_loss, test_accuracy = model.evaluate(X_test_images, y_test)
-print(f'Precisão no conjunto de teste: {test_accuracy * 100:.2f}%')
+model = create_inception_model(unfreeze_layers=20, learning_rate=0.00005)
+model.fit(train_generator, epochs=30, validation_data=(X_test_images_balanced, y_test_balanced))
+test_loss, test_accuracy = model.evaluate(X_test_images_balanced, y_test_balanced)
+print(f'Precisão no conjunto de teste equilibrado: {test_accuracy * 100:.2f}%')
 
 # matriz de confusao
-y_pred = np.argmax(model.predict(X_test_images), axis=-1)
-cm = confusion_matrix(y_test, y_pred)
+y_pred = np.argmax(model.predict(X_test_images_balanced), axis=-1)
+cm = confusion_matrix(y_test_balanced, y_pred)
 plt.figure(figsize=(10, 7))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 plt.xlabel('Predicted Label')
@@ -205,12 +222,14 @@ plt.ylabel('True Label')
 plt.title('Confusion Matrix')
 plt.show()
 
+# Relatório de classificação
+print(classification_report(y_test_balanced, y_pred, target_names=["1 day", "1 week", "1 month", "3 months"]))
 
 # Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
 num_images = 5
-random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
-sample_images = X_test_images[random_indices]
-sample_labels = y_test[random_indices]
+random_indices = np.random.choice(len(X_test_images_balanced), num_images, replace=False)
+sample_images = X_test_images_balanced[random_indices]
+sample_labels = y_test_balanced[random_indices]
 predictions = model.predict(sample_images)
 predicted_labels = np.argmax(predictions, axis=1)
 
@@ -224,8 +243,8 @@ plt.tight_layout()
 plt.show()
 
 # Plotar a curva ROC para cada classe
-y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
-y_pred_prob = model.predict(X_test_images)
+y_test_bin = label_binarize(y_test_balanced, classes=[0, 1, 2, 3])
+y_pred_prob = model.predict(X_test_images_balanced)
 
 fpr = dict()
 tpr = dict()
@@ -247,3 +266,4 @@ plt.ylabel('Taxa de Verdadeiros Positivos')
 plt.title('Curvas ROC para cada classe')
 plt.legend(loc="lower right")
 plt.show()
+
