@@ -1,4 +1,3 @@
-# Importações necessárias
 import tensorflow as tf
 from tensorflow.keras.applications import DenseNet121
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
@@ -9,11 +8,13 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
 from collections import Counter
-from sklearn.metrics import confusion_matrix, roc_curve, auc
+from sklearn.metrics import confusion_matrix, roc_curve, auc, classification_report
 import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import label_binarize
 from sklearn.utils.class_weight import compute_class_weight
+from sklearn.metrics.pairwise import rbf_kernel
+from sklearn.metrics import pairwise_distances
 
 # Função para carregar imagens das pastas correspondentes a diferentes intervalos de tempo
 def load_images_from_directories(directories, image_size):
@@ -35,7 +36,7 @@ def load_images_from_directories(directories, image_size):
 image_height, image_width, image_channels = 128, 128, 3
 num_classes = 4  # Número de intervalos de tempo pós impacto
 
-#  pastas de imagens (treino e teste)
+# Pastas de imagens (treino e teste)
 train_directories = [
     "F:\\UA\\3 ano\\2 semestre\\Projeto de licenciatura\\Codigo\\TBI-AD Microscope Images\\TBI-AD Microscope Images\\training\\1 day",
     "F:\\UA\\3 ano\\2 semestre\\Projeto de licenciatura\\Codigo\\TBI-AD Microscope Images\\TBI-AD Microscope Images\\training\\1 week",
@@ -201,85 +202,65 @@ for train_index, val_index in skf.split(X_train_images_balanced, y_train_balance
 print(f'Precisão média: {np.mean(accuracy_per_fold)}%')
 print(f'Desvio padrão da precisão: {np.std(accuracy_per_fold)}%')
 
-# Treinar o modelo final em todos os dados de treino
+# Treinar o modelo final em todos os dados de treino balanceados
 final_model = create_densenet_model()
+
 final_model.fit(
     train_generator,
     steps_per_epoch=len(X_train_images_balanced) // 32,
     epochs=30,
     class_weight=class_weights,
     callbacks=[
-        tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=5, restore_best_weights=True),
-        tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=3, min_lr=0.00001)
+        tf.keras.callbacks.EarlyStopping(monitor='loss', patience=5, restore_best_weights=True),
+        tf.keras.callbacks.ReduceLROnPlateau(monitor='loss', factor=0.2, patience=3, min_lr=0.00001)
     ]
 )
 
-# Avaliar o modelo no conjunto de teste
-test_loss, test_accuracy = final_model.evaluate(X_test_images, y_test, verbose=0)
-print(f'Precisão no conjunto de teste com pesos de classe: {test_accuracy * 100}%')
+# Equilibrar o conjunto de teste
+X_test_images_balanced, y_test_balanced = balance_classes(X_test_images, y_test)
 
-# Prever e analisar novamente
-y_pred_proba = final_model.predict(X_test_images)
-y_pred = np.argmax(y_pred_proba, axis=1)
+test_datagen = ImageDataGenerator()
 
-# Matriz de confusão e curva ROC
-cm = confusion_matrix(y_test, y_pred)
+# Aplicar aumento de dados ao conjunto de teste
+test_generator = test_datagen.flow(X_test_images_balanced, y_test_balanced, batch_size=32)
 
-# Plotar matriz de confusão atualizada
-plt.figure(figsize=(10, 8))
-sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=[f'Class {i}' for i in range(num_classes)], yticklabels=[f'Class {i}' for i in range(num_classes)])
-plt.xlabel('Label Prevista')
-plt.ylabel('Label Real')
-plt.title('Matriz de Confusão com Pesos de Classe')
+# Avaliar o modelo final no conjunto de teste equilibrado
+test_scores = final_model.evaluate(test_generator, verbose=0)
+print(f'Precisão no conjunto de teste equilibrado: {test_scores[1]*100:.2f}%')
+
+# Previsões do modelo no conjunto de teste equilibrado
+y_pred_balanced = np.argmax(final_model.predict(X_test_images_balanced), axis=1)
+
+# Relatório de classificação no conjunto de teste equilibrado
+print("Relatório de Classificação:")
+print(classification_report(y_test_balanced, y_pred_balanced))
+
+# Matriz de confusão 
+cm = confusion_matrix(y_test_balanced, y_pred_balanced)
+plt.figure(figsize=(10, 7))
+sns.heatmap(cm, annot=True, fmt="d", cmap="Blues")
+plt.xlabel("Classe Predita")
+plt.ylabel("Classe Real")
+plt.title("Matriz de Confusão (Conjunto de Teste equilibrado)")
 plt.show()
 
 # Curva ROC
-y_test_binarized = label_binarize(y_test, classes=[0, 1, 2, 3])
-fpr = dict()
-tpr = dict()
-roc_auc = dict()
+y_test_bin = label_binarize(y_test_balanced, classes=[0, 1, 2, 3])
+y_pred_prob = final_model.predict(X_test_images_balanced)
+fpr, tpr, roc_auc = {}, {}, {}
 
 for i in range(num_classes):
-    fpr[i], tpr[i], _ = roc_curve(y_test_binarized[:, i], y_pred_proba[:, i])
+    fpr[i], tpr[i], _ = roc_curve(y_test_bin[:, i], y_pred_prob[:, i])
     roc_auc[i] = auc(fpr[i], tpr[i])
 
 plt.figure()
-colors = ['blue', 'green', 'red', 'orange']
-for i, color in enumerate(colors):
-    plt.plot(fpr[i], tpr[i], color=color, lw=2, label=f'Class {i} (AUC = {roc_auc[i]:.2f})')
-plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+for i in range(num_classes):
+    plt.plot(fpr[i], tpr[i], label=f'Classe {i} (área = {roc_auc[i]:.2f})')
+plt.plot([0, 1], [0, 1], 'k--')
 plt.xlim([0.0, 1.0])
 plt.ylim([0.0, 1.05])
 plt.xlabel('Taxa de Falsos Positivos')
 plt.ylabel('Taxa de Verdadeiros Positivos')
-plt.title('Curva ROC com Pesos de Classe')
-plt.legend(loc='lower right')
-plt.show()
-
-# Plotar a evolução das precisões de validação
-plt.figure(figsize=(12, 6))
-for i, history in enumerate(history_per_fold, 1):
-    plt.plot(history.history['val_accuracy'], label=f'Fold {i}')
-
-plt.xlabel('Época')
-plt.ylabel('Precisão de Validação')
-plt.title('Evolução das Precisões de Validação por Fold')
-plt.legend()
-plt.show()
-
-# Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
-num_images = 5
-random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
-sample_images = X_test_images[random_indices]
-sample_labels = y_test[random_indices]
-predictions = model.predict(sample_images)
-predicted_labels = np.argmax(predictions, axis=1)
-
-plt.figure(figsize=(15, 15))
-for i in range(num_images):
-    plt.subplot(5, 2, i + 1)
-    plt.imshow(sample_images[i])
-    plt.title(f"True: {sample_labels[i]}, Predicted: {predicted_labels[i]}")
-    plt.axis('off')
-plt.tight_layout()
+plt.title('Curvas ROC Multiclasse (Conjunto de Teste Equilibrado)')
+plt.legend(loc="lower right")
 plt.show()
