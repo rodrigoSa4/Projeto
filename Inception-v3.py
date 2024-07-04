@@ -73,7 +73,7 @@ plt.ylabel('Número de Amostras')
 plt.title('Distribuição de Classes Antes do equilibrio')
 plt.show()
 
-# Definir max_count como o número máximo de amostras em qualquer classe
+#  max_count como o número máximo de amostras em qualquer classe
 max_count = max(counter_before.values())
 
 # Função para equilibrar as classes
@@ -99,7 +99,7 @@ def balance_classes(X_images, y):
 
     return np.vstack(X_images_balanced), np.hstack(y_balanced)
 
-# Aplicar balanceamento
+# Aplicar 
 X_train_images_balanced, y_train_balanced = balance_classes(X_train_images, y_train)
 
 # Contar o número de exemplos em cada classe depois do equilibrio
@@ -122,7 +122,7 @@ def create_inception_model(unfreeze_layers=10, learning_rate=0.0001):
         weights='imagenet'
     )
 
-    # Descongelar as últimas `unfreeze_layers` camadas
+    # Descongelar as últimas  camadas
     for layer in base_model.layers[-unfreeze_layers:]:
         if not isinstance(layer, layers.BatchNormalization):
             layer.trainable = True
@@ -142,11 +142,11 @@ def create_inception_model(unfreeze_layers=10, learning_rate=0.0001):
                   metrics=['accuracy'])
     return model
 
-# Ajuste de parâmetros para o treinamento
+# Ajuste de parâmetros para o treino
 num_folds = 5
 skf = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=42)
 
-# Definir gerador de dados de treino com aumento de dados
+#  gerador de dados de treino com aumento de dados
 train_datagen = ImageDataGenerator(
     rotation_range=20,
     width_shift_range=0.2,
@@ -162,7 +162,7 @@ train_generator = train_datagen.flow(X_train_images_balanced, y_train_balanced, 
 accuracy_per_fold = []
 fold_no = 1
 
-# Definir os pesos das classes (ajustar o peso da classe 0)
+#  pesos das classes (ajustar o peso da classe 0)
 class_weights = {0: 2.0, 1: 1.0, 2: 1.0, 3: 1.0}
 
 for train_index, val_index in skf.split(X_train_images_balanced, y_train_balanced):
@@ -191,7 +191,7 @@ for train_index, val_index in skf.split(X_train_images_balanced, y_train_balance
     accuracy_per_fold.append(scores[1] * 100)
     fold_no += 1
 
-# Avaliar o modelo no conjunto de teste balanceado
+# Avaliar o modelo no conjunto de teste equilibrado
 X_test_images_balanced, y_test_balanced = balance_classes(X_test_images, y_test)
 
 test_datagen = ImageDataGenerator()
@@ -224,23 +224,6 @@ plt.show()
 
 # Relatório de classificação
 print(classification_report(y_test_balanced, y_pred, target_names=["1 day", "1 week", "1 month", "3 months"]))
-
-# Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
-num_images = 5
-random_indices = np.random.choice(len(X_test_images_balanced), num_images, replace=False)
-sample_images = X_test_images_balanced[random_indices]
-sample_labels = y_test_balanced[random_indices]
-predictions = model.predict(sample_images)
-predicted_labels = np.argmax(predictions, axis=1)
-
-plt.figure(figsize=(15, 15))
-for i in range(num_images):
-    plt.subplot(5, 2, i + 1)
-    plt.imshow(sample_images[i])
-    plt.title(f"True: {sample_labels[i]}, Predicted: {predicted_labels[i]}")
-    plt.axis('off')
-plt.tight_layout()
-plt.show()
 
 # Plotar a curva ROC para cada classe
 y_test_bin = label_binarize(y_test_balanced, classes=[0, 1, 2, 3])
