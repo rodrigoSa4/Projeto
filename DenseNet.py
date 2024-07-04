@@ -75,7 +75,7 @@ plt.ylabel('Número de Amostras')
 plt.title('Distribuição de Classes Antes do equilibrio')
 plt.show()
 
-# Definir max_count como o número máximo de amostras em qualquer classe
+#  max_count como o número máximo de amostras em qualquer classe
 max_count = max(counter_before.values())
 
 # Função para equilibrar as classes
@@ -144,7 +144,7 @@ def create_densenet_model():
                   metrics=['accuracy'])
     return model
 
-# Definir gerador de dados de treino com aumento de dados
+# gerador de dados de treino com aumento de dados
 train_datagen = ImageDataGenerator(
     rotation_range=20,
     width_shift_range=0.2,
@@ -157,7 +157,7 @@ train_datagen = ImageDataGenerator(
 # Aplicar aumento de dados
 train_generator = train_datagen.flow(X_train_images_balanced, y_train_balanced, batch_size=32)
 
-# Calcular pesos de classe
+#  pesos de classe
 class_weights = compute_class_weight(class_weight='balanced', classes=np.unique(y_train_balanced), y=y_train_balanced)
 class_weights = {i : class_weights[i] for i in range(len(class_weights))}
 print("Pesos de classe:", class_weights)
@@ -198,11 +198,11 @@ for train_index, val_index in skf.split(X_train_images_balanced, y_train_balance
     
     fold_no += 1
 
-# Exibir a precisão média e desvio padrão
+# print da precisão média e desvio padrão
 print(f'Precisão média: {np.mean(accuracy_per_fold)}%')
 print(f'Desvio padrão da precisão: {np.std(accuracy_per_fold)}%')
 
-# Treinar o modelo final em todos os dados de treino balanceados
+# Treinar o modelo final em todos os dados de treino equilibrados
 final_model = create_densenet_model()
 
 final_model.fit(
@@ -221,7 +221,7 @@ X_test_images_balanced, y_test_balanced = balance_classes(X_test_images, y_test)
 
 test_datagen = ImageDataGenerator()
 
-# Aplicar aumento de dados ao conjunto de teste
+# aumento de dados ao conjunto de teste
 test_generator = test_datagen.flow(X_test_images_balanced, y_test_balanced, batch_size=32)
 
 # Avaliar o modelo final no conjunto de teste equilibrado
