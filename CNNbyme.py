@@ -8,7 +8,7 @@ from PIL import Image
 import matplotlib.pyplot as plt
 from sklearn.utils import resample
 from collections import Counter
-from sklearn.metrics import confusion_matrix, roc_curve, auc
+from sklearn.metrics import confusion_matrix, roc_curve, auc, classification_report
 import seaborn as sns
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import label_binarize
@@ -69,10 +69,13 @@ class_counts = Counter(y_train)
 max_count = max(class_counts.values())
 
 # Função para equilibrar as classes
-def balance_classes(X_images, y):
+def balance_classes(X_images, y, max_count=None):
     unique_classes = np.unique(y)
     X_images_balanced = []
     y_balanced = []
+
+    if max_count is None:
+        max_count = max(Counter(y).values())
 
     for cls in unique_classes:
         class_indices = np.where(y == cls)[0]
@@ -92,11 +95,14 @@ def balance_classes(X_images, y):
 
     return np.vstack(X_images_balanced), np.hstack(y_balanced)
 
-# Aplicar o equilibrio
+# Aplicar o balanceamento
 X_train_images_balanced, y_train_balanced = balance_classes(X_train_images, y_train)
+X_test_images_balanced, y_test_balanced = balance_classes(X_test_images, y_test, max_count=max_count)
 
-print("Número de amostras de treino após equilibrio:", len(y_train_balanced))
-print("Distribuição das classes no conjunto de treino equilibrado:", Counter(y_train_balanced))
+print("Número de amostras de treino após balanceamento:", len(y_train_balanced))
+print("Distribuição das classes no conjunto de treino balanceado:", Counter(y_train_balanced))
+print("Número de amostras de teste após balanceamento:", len(y_test_balanced))
+print("Distribuição das classes no conjunto de teste balanceado:", Counter(y_test_balanced))
 
 # Função para construir o modelo 
 def create_model():
@@ -127,7 +133,7 @@ def create_model():
     return model
 
 # Configuração da validação cruzada
-kf = StratifiedKFold(n_splits=10, shuffle=True, random_state=42)
+kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 validation_scores = []
 
 for train_index, val_index in kf.split(X_train_images_balanced, y_train_balanced):
@@ -144,7 +150,7 @@ for train_index, val_index in kf.split(X_train_images_balanced, y_train_balanced
     
     model = create_model()
 
-    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=7, restore_best_weights=True)
+    early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
     reduce_lr = tf.keras.callbacks.ReduceLROnPlateau(monitor='val_loss', factor=0.2, patience=5, min_lr=0.00001)
 
     model.fit(
@@ -165,14 +171,14 @@ print(f"Score Médio de Validação Cruzada: {np.mean(validation_scores)}")
 model = create_model()
 history = model.fit(
     X_train_images_balanced, y_train_balanced,
-    validation_data=(X_test_images, y_test),
+    validation_data=(X_test_images_balanced, y_test_balanced),
     epochs=100,
     batch_size=32,
     callbacks=[early_stopping, reduce_lr]
 )
 
 # Avaliação do modelo
-test_loss, test_accuracy = model.evaluate(X_test_images, y_test)
+test_loss, test_accuracy = model.evaluate(X_test_images_balanced, y_test_balanced)
 print(f"Test Accuracy: {test_accuracy * 100:.2f}%")
 
 # Plotar gráfico de scores de validação por split
@@ -184,9 +190,9 @@ plt.title('Validation Scores por Split na Validação Cruzada')
 plt.legend()
 plt.show()
 
-# matriz de confusao
-y_pred = np.argmax(model.predict(X_test_images), axis=-1)
-cm = confusion_matrix(y_test, y_pred)
+# Matriz de confusão
+y_pred = np.argmax(model.predict(X_test_images_balanced), axis=-1)
+cm = confusion_matrix(y_test_balanced, y_pred)
 plt.figure(figsize=(10, 7))
 sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
 plt.xlabel('Predicted Label')
@@ -194,26 +200,12 @@ plt.ylabel('True Label')
 plt.title('Confusion Matrix')
 plt.show()
 
-# Plotar 5 imagens aleatórias do conjunto de teste com as classes reais e previstas
-num_images = 5
-random_indices = np.random.choice(len(X_test_images), num_images, replace=False)
-sample_images = X_test_images[random_indices]
-sample_labels = y_test[random_indices]
-predictions = model.predict(sample_images)
-predicted_labels = np.argmax(predictions, axis=1)
-
-plt.figure(figsize=(15, 15))
-for i in range(num_images):
-    plt.subplot(5, 2, i + 1)
-    plt.imshow(sample_images[i])
-    plt.title(f"True: {sample_labels[i]}, Predicted: {predicted_labels[i]}")
-    plt.axis('off')
-plt.tight_layout()
-plt.show()
+# Relatório de classificação
+print("Classification Report:\n", classification_report(y_test_balanced, y_pred))
 
 # Plotar curva ROC
-y_test_bin = label_binarize(y_test, classes=[0, 1, 2, 3])
-y_pred_prob = model.predict(X_test_images)
+y_test_bin = label_binarize(y_test_balanced, classes=[0, 1, 2, 3])
+y_pred_prob = model.predict(X_test_images_balanced)
 fpr = dict()
 tpr = dict()
 roc_auc = dict()
@@ -235,5 +227,6 @@ plt.ylabel('True Positive Rate')
 plt.title('Receiver Operating Characteristic (ROC) Curve')
 plt.legend(loc="lower right")
 plt.show()
+
 
 
